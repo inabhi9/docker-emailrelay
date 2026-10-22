@@ -1,0 +1,83 @@
+name: Watch upstream emailrelay tags
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  watch-and-build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Get latest tag from upstream repo
+        id: upstream
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG=$(curl -fsSL \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            https://api.github.com/repos/aclemons/emailrelay/tags \
+            | jq -r '.[0].name // empty')
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore last built tag from cache
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: .last-emailrelay-tag
+          key: emailrelay-upstream-tag
+
+      - name: Check whether a new upstream tag needs a build
+        id: should_build
+        shell: bash
+        run: |
+          NEW_TAG="${{ steps.upstream.outputs.tag }}"
+          LAST_TAG="$(cat .last-emailrelay-tag 2>/dev/null || true)"
+
+          echo "new_tag=${NEW_TAG}"
+          echo "last_tag=${LAST_TAG}"
+
+          if [ -n "${NEW_TAG}" ] && [ "${NEW_TAG}" != "${LAST_TAG}" ]; then
+            echo "${NEW_TAG}" > .last-emailrelay-tag
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up QEMU
+        if: steps.should_build.outputs.build == 'true'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        if: steps.should_build.outputs.build == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: steps.should_build.outputs.build == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image for new upstream tag
+        if: steps.should_build.outputs.build == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            EMAILRELAY_VERSION=${{ steps.upstream.outputs.tag }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/emailrelay:${{ steps.upstream.outputs.tag }}
+            ghcr.io/${{ github.repository_owner }}/emailrelay:latest
