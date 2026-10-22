@@ -7,6 +7,9 @@ RUN apt-get update \
         build-essential \
         ca-certificates \
         git \
+        autoconf \
+        automake \
+        libtool \
         libssl-dev \
         pkg-config \
     && rm -rf /var/lib/apt/lists/*
@@ -15,6 +18,7 @@ WORKDIR /tmp
 
 RUN git clone --depth 1 --branch "${EMAILRELAY_VERSION}" https://github.com/aclemons/emailrelay.git /tmp/emailrelay \
     && cd /tmp/emailrelay \
+    && autoreconf -fi \
     && ./configure --prefix=/usr --sysconfdir=/etc --localstatedir=/var \
     && make -j"$(nproc)" \
     && make install \
