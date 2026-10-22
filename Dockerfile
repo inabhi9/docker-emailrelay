@@ -2,8 +2,11 @@ FROM debian:bookworm-slim
 
 ARG EMAILRELAY_VERSION=master
 
+ENV DEBIAN_FRONTEND=noninteractive \
+    CXXFLAGS="-include cstring"
+
 RUN apt-get update \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    && apt-get install -y --no-install-recommends \
         build-essential \
         ca-certificates \
         git \

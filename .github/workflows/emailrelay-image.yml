@@ -42,9 +42,6 @@ jobs:
           NEW_TAG="${{ steps.upstream.outputs.tag }}"
           LAST_TAG="$(cat .last-emailrelay-tag 2>/dev/null || true)"
 
-          echo "new_tag=${NEW_TAG}"
-          echo "last_tag=${LAST_TAG}"
-
           if [ -n "${NEW_TAG}" ] && [ "${NEW_TAG}" != "${LAST_TAG}" ]; then
             echo "${NEW_TAG}" > .last-emailrelay-tag
             echo "build=true" >> "$GITHUB_OUTPUT"
