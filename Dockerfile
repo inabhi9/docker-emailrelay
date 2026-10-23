@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 #
-# E-MailRelay (https://github.com/aclemons/emailrelay) - multi-arch image
+# E-MailRelay (https://github.com/aclemons/emailrelay) - Alpine multi-arch image
 # Works natively on arm64 (aarch64) and amd64: nothing in here is
 # architecture-specific, the build simply runs on whatever platform it targets.
 #
@@ -12,19 +12,17 @@
 ############################
 # Stage 1: build
 ############################
-FROM debian:bookworm-slim AS build
+FROM alpine:3.22 AS build
 
 # Git ref to build: a tag, branch or commit (the repo's VERSION file says 2.6.1 on master)
 ARG EMAILRELAY_REF=master
 
-RUN apt-get update \
- && apt-get install -y --no-install-recommends \
-      build-essential \
-      ca-certificates \
+RUN apk add --no-cache \
+      build-base \
       git \
-      pkg-config \
-      libssl-dev \
- && rm -rf /var/lib/apt/lists/*
+      linux-headers \
+      openssl-dev \
+      pkgconf
 
 WORKDIR /src
 RUN git clone https://github.com/aclemons/emailrelay.git . \
@@ -46,21 +44,21 @@ RUN ./configure \
       --with-openssl \
  && make -j"$(nproc)" \
  && make install DESTDIR=/out \
- && strip /out/usr/sbin/emailrelay* 2>/dev/null || true
+ && (strip /out/usr/sbin/emailrelay* 2>/dev/null || true)
 
 ############################
 # Stage 2: runtime
 ############################
-FROM debian:bookworm-slim
+FROM alpine:3.22
 
-RUN apt-get update \
- && apt-get install -y --no-install-recommends \
+RUN apk add --no-cache \
       ca-certificates \
+      libstdc++ \
+      libgcc \
       libssl3 \
- && rm -rf /var/lib/apt/lists/* \
- && groupadd --system --gid 1000 emailrelay \
- && useradd  --system --uid 1000 --gid emailrelay --no-create-home \
-             --home-dir /var/spool/emailrelay --shell /usr/sbin/nologin emailrelay \
+      libcrypto3 \
+ && addgroup -S -g 1000 emailrelay \
+ && adduser  -S -u 1000 -G emailrelay -H -h /var/spool/emailrelay -s /sbin/nologin emailrelay \
  && mkdir -p /var/spool/emailrelay \
  && chown emailrelay:emailrelay /var/spool/emailrelay
 
@@ -80,4 +78,4 @@ USER emailrelay
 #   docker run ... emailrelay:arm64 --log --no-daemon --as-server --port 10025 \
 #       --spool-dir /var/spool/emailrelay --poll 60 --forward-to smtp.example.com:25
 ENTRYPOINT ["/usr/sbin/emailrelay"]
-CMD ["--log", "--no-syslog", "--verbose", "--no-daemon", "--as-server", "--port", "25", "--spool-dir", "/var/spool/emailrelay", "--remote-clients"]
+CMD []
